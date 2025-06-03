@@ -1,42 +1,57 @@
 /* global WebImporter */
 export default function parse(element, { document }) {
-  // Find the hero block (works if passed .hero-wrapper or the .hero block itself)
-  let heroBlock = element;
-  if (!heroBlock.classList.contains('hero')) {
-    const candidate = element.querySelector(':scope > .hero.block');
-    if (candidate) heroBlock = candidate;
+  // Find the deepest content div
+  const contentDiv = element.querySelector('div > div > div');
+  if (!contentDiv) return;
+
+  // Find the image (picture or img inside first <p>)
+  let imageEl = null;
+  const firstP = contentDiv.querySelector('p');
+  if (firstP) {
+    const picture = firstP.querySelector('picture');
+    if (picture) {
+      imageEl = picture;
+    } else {
+      const img = firstP.querySelector('img');
+      if (img) imageEl = img;
+    }
   }
 
-  // Find the innermost content div
-  let contentDiv = heroBlock;
-  while (contentDiv && contentDiv.children.length === 1 && contentDiv.firstElementChild.tagName === 'DIV') {
-    contentDiv = contentDiv.firstElementChild;
+  // Find the title (the first <p> that is not the image p)
+  let titleEl = null;
+  const children = Array.from(contentDiv.children);
+  // Assume image is in a <p>, title is in the next <p>
+  let foundImageP = false;
+  for (let i = 0; i < children.length; i++) {
+    if (children[i].tagName === 'P' && !foundImageP) {
+      foundImageP = true;
+      continue;
+    }
+    if (children[i].tagName === 'P' && foundImageP) {
+      titleEl = children[i];
+      break;
+    }
+  }
+  // Fallback: if only one <p> and no image, treat it as title
+  if (!titleEl && firstP && !firstP.querySelector('picture')) {
+    titleEl = firstP;
   }
 
-  // Find all direct <p> children (some may contain images, some text)
-  const ps = contentDiv.querySelectorAll(':scope > p');
-  let imagePara = null;
-  let titlePara = null;
-
-  if (ps.length > 0) imagePara = ps[0];
-  if (ps.length > 1) titlePara = ps[1];
-
-  // If the title is present, convert it to a heading (H1) for semantic meaning
-  let headingElem = null;
-  if (titlePara) {
-    headingElem = document.createElement('h1');
-    headingElem.innerHTML = titlePara.innerHTML;
+  // Convert title <p> to <h1> for semantic meaning
+  let headingEl = null;
+  if (titleEl) {
+    headingEl = document.createElement('h1');
+    headingEl.innerHTML = titleEl.innerHTML;
   }
 
-  // Compose the single cell content as [image element, heading element] per order in source
-  const cellContent = [];
-  if (imagePara) cellContent.push(imagePara);
-  if (headingElem) cellContent.push(headingElem);
+  // Build the block content array
+  const contentArr = [];
+  if (imageEl) contentArr.push(imageEl);
+  if (headingEl) contentArr.push(headingEl);
 
-  // Table structure: header, then one cell containing the whole hero content
   const cells = [
     ['Hero'],
-    [cellContent],
+    [contentArr]
   ];
 
   const table = WebImporter.DOMUtils.createTable(cells, document);
